@@ -56,6 +56,114 @@ async def main():
 asyncio.run(main())
 ```
 
+## High Level Design (HLD)
+
+### Architecture
+
+```
+┌─────────────────────────────────────────────────────────────┐
+│                         User                                 │
+│   ┌─────────────────────────────────────────────────────┐   │
+│   │                    CLI / API                         │   │
+│   │              (telegram_dl.cli / client)               │   │
+│   └─────────────────────────────────────────────────────┘   │
+│                              │                               │
+│   ┌─────────────────────────────────────────────────────┐   │
+│   │               TelegramDownloader                     │   │
+│   │                 (Client Layer)                       │   │
+│   │  • connect() / disconnect()                          │   │
+│   │  • get_channel_videos()                              │   │
+│   │  • download_video()                                   │   │
+│   │  • download_all_videos()                              │   │
+│   └─────────────────────────────────────────────────────┘   │
+│                              │                               │
+│   ┌─────────────────────────────────────────────────────┐   │
+│   │              Telethon Library                        │   │
+│   │            (Telegram Protocol Layer)                  │   │
+│   │  • MTProto Protocol                                  │   │
+│   │  • Session Management                                │   │
+│   │  • Authentication (OTP/2FA)                          │   │
+│   └─────────────────────────────────────────────────────┘   │
+│                              │                               │
+└──────────────────────────────│──────────────────────────────┘
+                               │
+                               ▼
+                    ┌─────────────────────┐
+                    │  Telegram Servers    │
+                    │   api.telegram.org   │
+                    └─────────────────────┘
+```
+
+### Components
+
+| Component | Responsibility |
+|-----------|---------------|
+| `cli.py` | Command-line interface, argument parsing |
+| `client.py` | Core download logic, Telegram client management |
+| `exceptions.py` | Custom exception classes |
+
+### Data Flow
+
+```
+1. User provides credentials (API_ID, API_HASH, Phone)
+                          │
+                          ▼
+2. TelegramDownloader.connect() 
+   - Creates Telethon client
+   - Establishes MTProto connection
+   - Handles authentication (OTP verification)
+                          │
+                          ▼
+3. User calls download_all_videos(channel_id)
+   - Fetches channel entity
+   - Iterates messages via iter_messages()
+   - Filters videos by message.video attribute
+                          │
+                          ▼
+4. For each video:
+   - Check if file already exists (skip if yes)
+   - Download via download_media()
+   - Progress callback (optional)
+                          │
+                          ▼
+5. Session saved for future use
+```
+
+### Class Diagram
+
+```
+TelegramDownloader
+├── __init__(api_id, api_hash, phone, session_name)
+├── connect() → TelegramClient
+├── disconnect()
+├── get_dialogs() → List[Dict]
+├── get_channel_videos(channel_id) → List[Dict]
+├── download_video(channel_id, video_id, output_dir, filename) → str
+└── download_all_videos(channel_id, output_dir, progress_callback) → List[str]
+
+Exceptions (exceptions.py)
+├── TelegramDLError (base)
+├── AuthenticationError
+├── ChannelNotFoundError
+└── VideoNotFoundError
+```
+
+### Session Management
+
+- Sessions are stored locally as `.session` files
+- First login requires OTP verification
+- Session persists for future runs (no re-auth needed)
+- Each unique session name creates a separate session
+
+### Error Handling
+
+```
+ConnectionError → TelegramDLError
+SessionPasswordNeededError → AuthenticationError
+ChannelNotFoundError → Custom exception
+VideoNotFoundError → Custom exception
+```
+
 ## Features
 
 - Download all videos from Telegram channels

@@ -2,10 +2,10 @@ Metadata-Version: 2.4
 Name: telegram-dl
 Version: 1.0.0
 Summary: Download videos from Telegram channels
-Author-email: Your Name <you@example.com>
+Author-email: KD <kd@example.com>
 License: MIT
-Project-URL: Homepage, https://github.com/yourusername/telegram-dl
-Project-URL: Repository, https://github.com/yourusername/telegram-dl
+Project-URL: Homepage, https://github.com/kuldeep27396/telegram-dl
+Project-URL: Repository, https://github.com/kuldeep27396/telegram-dl
 Keywords: telegram,download,video,cli
 Classifier: Development Status :: 4 - Beta
 Classifier: Intended Audience :: End Users/Desktop
@@ -24,7 +24,7 @@ Requires-Dist: black; extra == "dev"
 Requires-Dist: ruff; extra == "dev"
 Dynamic: license-file
 
-# Telegram Downloader
+# telegram-dl
 
 A Python CLI tool to download videos from Telegram channels.
 
@@ -34,27 +34,30 @@ A Python CLI tool to download videos from Telegram channels.
 pip install telegram-dl
 ```
 
-## Setup
+## Quick Start
+
+### 1. Get Telegram API Credentials
 
 1. Go to [my.telegram.org](https://my.telegram.org)
-2. Log in and create an app
-3. Copy your `API ID` and `API Hash`
+2. Log in with your phone number
+3. Click **"API development tools"**
+4. Create a new app
+5. Copy your **API ID** and **API Hash**
 
-## Usage
+### 2. Download Videos
 
-### List your channels
 ```bash
-telegram-dl --api-id 12345 --api-hash abc123 --phone +1234567890 --list-channels
+# List your channels first
+telegram-dl --api-id 12345 --api-hash abc123def456 --phone +1234567890 --list-channels
+
+# Download all videos from a channel
+telegram-dl --api-id 12345 --api-hash abc123def456 --phone +1234567890 --channel -1001234567890
 ```
 
-### Download all videos from a channel
-```bash
-telegram-dl --api-id 12345 --api-hash abc123 --phone +1234567890 --channel -100123456789
-```
+### 3. Use Custom Output Directory
 
-### Download to custom directory
 ```bash
-telegram-dl --api-id 12345 --api-hash abc123 --phone +1234567890 --channel -100123456789 --output ./my_videos
+telegram-dl --api-id 12345 --api-hash abc123def456 --phone +1234567890 --channel -1001234567890 --output ./my_videos
 ```
 
 ## Programmatic Usage
@@ -63,9 +66,13 @@ telegram-dl --api-id 12345 --api-hash abc123 --phone +1234567890 --channel -1001
 from telegram_dl import TelegramDownloader
 
 async def main():
-    async with TelegramDownloader(api_id, api_hash, phone) as dl:
+    async with TelegramDownloader(
+        api_id=12345,
+        api_hash="abc123def456",
+        phone="+1234567890"
+    ) as dl:
         # List channels
-        for dialog in dl.client.iter_dialogs():
+        async for dialog in dl.client.iter_dialogs():
             if dialog.is_channel:
                 print(f"{dialog.id} | {dialog.title}")
         
@@ -75,14 +82,128 @@ async def main():
 asyncio.run(main())
 ```
 
+## High Level Design (HLD)
+
+### Architecture
+
+```
+┌─────────────────────────────────────────────────────────────┐
+│                         User                                 │
+│   ┌─────────────────────────────────────────────────────┐   │
+│   │                    CLI / API                         │   │
+│   │              (telegram_dl.cli / client)               │   │
+│   └─────────────────────────────────────────────────────┘   │
+│                              │                               │
+│   ┌─────────────────────────────────────────────────────┐   │
+│   │               TelegramDownloader                     │   │
+│   │                 (Client Layer)                       │   │
+│   │  • connect() / disconnect()                          │   │
+│   │  • get_channel_videos()                              │   │
+│   │  • download_video()                                   │   │
+│   │  • download_all_videos()                              │   │
+│   └─────────────────────────────────────────────────────┘   │
+│                              │                               │
+│   ┌─────────────────────────────────────────────────────┐   │
+│   │              Telethon Library                        │   │
+│   │            (Telegram Protocol Layer)                  │   │
+│   │  • MTProto Protocol                                  │   │
+│   │  • Session Management                                │   │
+│   │  • Authentication (OTP/2FA)                          │   │
+│   └─────────────────────────────────────────────────────┘   │
+│                              │                               │
+└──────────────────────────────│──────────────────────────────┘
+                               │
+                               ▼
+                    ┌─────────────────────┐
+                    │  Telegram Servers    │
+                    │   api.telegram.org   │
+                    └─────────────────────┘
+```
+
+### Components
+
+| Component | Responsibility |
+|-----------|---------------|
+| `cli.py` | Command-line interface, argument parsing |
+| `client.py` | Core download logic, Telegram client management |
+| `exceptions.py` | Custom exception classes |
+
+### Data Flow
+
+```
+1. User provides credentials (API_ID, API_HASH, Phone)
+                          │
+                          ▼
+2. TelegramDownloader.connect() 
+   - Creates Telethon client
+   - Establishes MTProto connection
+   - Handles authentication (OTP verification)
+                          │
+                          ▼
+3. User calls download_all_videos(channel_id)
+   - Fetches channel entity
+   - Iterates messages via iter_messages()
+   - Filters videos by message.video attribute
+                          │
+                          ▼
+4. For each video:
+   - Check if file already exists (skip if yes)
+   - Download via download_media()
+   - Progress callback (optional)
+                          │
+                          ▼
+5. Session saved for future use
+```
+
+### Class Diagram
+
+```
+TelegramDownloader
+├── __init__(api_id, api_hash, phone, session_name)
+├── connect() → TelegramClient
+├── disconnect()
+├── get_dialogs() → List[Dict]
+├── get_channel_videos(channel_id) → List[Dict]
+├── download_video(channel_id, video_id, output_dir, filename) → str
+└── download_all_videos(channel_id, output_dir, progress_callback) → List[str]
+
+Exceptions (exceptions.py)
+├── TelegramDLError (base)
+├── AuthenticationError
+├── ChannelNotFoundError
+└── VideoNotFoundError
+```
+
+### Session Management
+
+- Sessions are stored locally as `.session` files
+- First login requires OTP verification
+- Session persists for future runs (no re-auth needed)
+- Each unique session name creates a separate session
+
+### Error Handling
+
+```
+ConnectionError → TelegramDLError
+SessionPasswordNeededError → AuthenticationError
+ChannelNotFoundError → Custom exception
+VideoNotFoundError → Custom exception
+```
+
 ## Features
 
 - Download all videos from Telegram channels
 - Automatic session management (login once, use many times)
 - Progress tracking
-- Named file preservation
+- Named file preservation from Telegram
 - Skip already downloaded files
+- CLI and programmatic API
+
+## Requirements
+
+- Python 3.10+
+- Telegram API credentials (get from [my.telegram.org](https://my.telegram.org))
 
 ## License
 
-MIT
+MIT License
