@@ -1,0 +1,2 @@
+[console_scripts]
+telegram-dl = telegram_dl.cli:main

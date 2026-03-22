@@ -1,0 +1,88 @@
+Metadata-Version: 2.4
+Name: telegram-dl
+Version: 1.0.0
+Summary: Download videos from Telegram channels
+Author-email: Your Name <you@example.com>
+License: MIT
+Project-URL: Homepage, https://github.com/yourusername/telegram-dl
+Project-URL: Repository, https://github.com/yourusername/telegram-dl
+Keywords: telegram,download,video,cli
+Classifier: Development Status :: 4 - Beta
+Classifier: Intended Audience :: End Users/Desktop
+Classifier: License :: OSI Approved :: MIT License
+Classifier: Programming Language :: Python :: 3
+Classifier: Programming Language :: Python :: 3.10
+Classifier: Programming Language :: Python :: 3.11
+Classifier: Programming Language :: Python :: 3.12
+Requires-Python: >=3.10
+Description-Content-Type: text/markdown
+License-File: LICENSE
+Requires-Dist: telethon>=1.35.0
+Provides-Extra: dev
+Requires-Dist: pytest; extra == "dev"
+Requires-Dist: black; extra == "dev"
+Requires-Dist: ruff; extra == "dev"
+Dynamic: license-file
+
+# Telegram Downloader
+
+A Python CLI tool to download videos from Telegram channels.
+
+## Installation
+
+```bash
+pip install telegram-dl
+```
+
+## Setup
+
+1. Go to [my.telegram.org](https://my.telegram.org)
+2. Log in and create an app
+3. Copy your `API ID` and `API Hash`
+
+## Usage
+
+### List your channels
+```bash
+telegram-dl --api-id 12345 --api-hash abc123 --phone +1234567890 --list-channels
+```
+
+### Download all videos from a channel
+```bash
+telegram-dl --api-id 12345 --api-hash abc123 --phone +1234567890 --channel -100123456789
+```
+
+### Download to custom directory
+```bash
+telegram-dl --api-id 12345 --api-hash abc123 --phone +1234567890 --channel -100123456789 --output ./my_videos
+```
+
+## Programmatic Usage
+
+```python
+from telegram_dl import TelegramDownloader
+
+async def main():
+    async with TelegramDownloader(api_id, api_hash, phone) as dl:
+        # List channels
+        for dialog in dl.client.iter_dialogs():
+            if dialog.is_channel:
+                print(f"{dialog.id} | {dialog.title}")
+        
+        # Download all videos
+        await dl.download_all_videos(channel_id, "./videos")
+
+asyncio.run(main())
+```
+
+## Features
+
+- Download all videos from Telegram channels
+- Automatic session management (login once, use many times)
+- Progress tracking
+- Named file preservation
+- Skip already downloaded files
+
+## License
+
+MIT
