@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "telegram-dl"
-version = "1.0.2"
+version = "1.0.3"
 description = "Download videos from Telegram channels"
 readme = "README.md"
 license = {text = "MIT"}
@@ -35,6 +35,7 @@ telegram-dl = "telegram_dl.cli:main"
 [project.urls]
 Homepage = "https://github.com/kuldeep27396/telegram-dl"
 Repository = "https://github.com/kuldeep27396/telegram-dl"
+Issues = "https://github.com/kuldeep27396/telegram-dl/issues"
 
 [tool.setuptools.packages.find]
 where = ["."]
