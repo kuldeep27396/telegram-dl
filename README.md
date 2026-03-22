@@ -1,5 +1,10 @@
 # telegram-dl
 
+![PyPI Version](https://img.shields.io/pypi/v/telegram-dl)
+![Python Versions](https://img.shields.io/pypi/pyversions/telegram-dl)
+![License](https://img.shields.io/badge/license-MIT-blue.svg)
+![GitHub Release](https://img.shields.io/github/v/release/kuldeep27396/telegram-dl)
+
 A Python CLI tool to download videos from Telegram channels.
 
 ## Installation
@@ -56,204 +61,164 @@ async def main():
 asyncio.run(main())
 ```
 
+## Publishing Guide
+
+### Manual Publishing to PyPI
+
+```bash
+# 1. Install build tools
+pip install build twine
+
+# 2. Update version in pyproject.toml
+# version = "1.2.0"
+
+# 3. Build the package
+rm -rf dist/
+python -m build
+
+# 4. Upload to PyPI
+twine upload dist/*
+```
+
+### GitHub Actions Auto-Publish
+
+1. Go to [PyPI Trusted Publishing](https://pypi.org/manage/account/publishing/)
+2. Add a new publisher:
+   - **Owner:** `kuldeep27396`
+   - **Repository name:** `telegram-dl`
+   - **Workflow filename:** `publish.yml`
+   - **Environment name:** `pypi`
+3. Push a new tag:
+```bash
+git tag v1.2.0
+git push && git push --tags
+# Or create release on GitHub
+```
+
 ## High Level Design (HLD)
+
+> **Note:** For colorful Mermaid diagrams, see the [GitHub README](https://github.com/kuldeep27396/telegram-dl/blob/main/README.md)
 
 ### Architecture
 
-```mermaid
-flowchart TB
-    subgraph User["👤 User Layer"]
-        CLI["🖥️ CLI Interface<br/>(telegram-dl)"]
-        API["📦 Python API<br/>(TelegramDownloader)"]
-    end
-    
-    subgraph Core["⚙️ Core Layer"]
-        TD["🔷 TelegramDownloader<br/>• connect() / disconnect()<br/>• get_channel_videos()<br/>• download_video()<br/>• download_all_videos()"]
-    end
-    
-    subgraph Protocol["🔌 Protocol Layer"]
-        TL["🔶 Telethon Library<br/>• MTProto<br/>• Session Management<br/>• OTP/2FA Auth"]
-    end
-    
-    subgraph External["🌐 External Services"]
-        TS["📡 Telegram Servers<br/>api.telegram.org"]
-    end
-    
-    User --> Core
-    Core --> Protocol
-    Protocol --> External
-    
-    style User fill:#e1f5fe
-    style Core fill:#fff3e0
-    style Protocol fill:#f3e5f5
-    style External fill:#e8f5e9
+```
+┌─────────────────────────────────────────────────────────────┐
+│                      User Layer (👤)                         │
+│  ┌─────────────────┐         ┌─────────────────────┐       │
+│  │  CLI Interface  │         │    Python API        │       │
+│  │   (telegram-dl) │         │ TelegramDownloader   │       │
+│  └─────────────────┘         └─────────────────────┘       │
+└─────────────────────────────────────────────────────────────┘
+                              │
+                              ▼
+┌─────────────────────────────────────────────────────────────┐
+│                    Core Layer (⚙️)                           │
+│  TelegramDownloader                                          │
+│  ├─ connect() / disconnect()                               │
+│  ├─ get_channel_videos()                                    │
+│  ├─ download_video()                                        │
+│  └─ download_all_videos()                                   │
+└─────────────────────────────────────────────────────────────┘
+                              │
+                              ▼
+┌─────────────────────────────────────────────────────────────┐
+│                  Protocol Layer (🔌)                         │
+│  Telethon Library                                            │
+│  ├─ MTProto Protocol                                        │
+│  ├─ Session Management                                      │
+│  └─ OTP/2FA Authentication                                 │
+└─────────────────────────────────────────────────────────────┘
+                              │
+                              ▼
+┌─────────────────────────────────────────────────────────────┐
+│              External Services (🌐)                           │
+│            Telegram Servers (api.telegram.org)                 │
+└─────────────────────────────────────────────────────────────┘
 ```
 
 ### Data Flow
 
-```mermaid
-sequenceDiagram
-    participant U as 👤 User
-    participant C as 🖥️ CLI/API
-    participant TD as 🔷 TelegramDownloader
-    participant TL as 🔶 Telethon
-    participant TS as 📡 Telegram
-
-    U->>C: Provide credentials
-    C->>TD: Initialize
-    TD->>TL: connect()
-    TL->>TS: Establish connection
-    TS-->>TL: OTP verification
-    TL-->>TD: Authenticated
-    TD-->>C: Ready
-    
-    U->>C: download_all_videos(channel)
-    C->>TD: Fetch channel
-    TD->>TL: iter_messages()
-    TL->>TS: Get messages
-    TS-->>TL: Return messages
-    TL-->>TD: Video messages
-    TD->>TL: download_media()
-    loop For each video
-        TL->>TS: Request file
-        TS-->>TL: Stream file
-        TL-->>TD: Save to disk
-    end
-    TD-->>C: Done!
+```
+User ──► CLI/API ──► TelegramDownloader ──► Telethon ──► Telegram
+           │               │                    │           │
+        Credentials    Connect & Auth       MTProto    Server
+           │               │                    │           │
+           ▼               ▼                    ▼           ▼
+         Input      Session Created       Protocol    Video Stream
 ```
 
-### Class Diagram
+### Class Structure
 
-```mermaid
-classDiagram
-    class TelegramDownloader {
-        +int api_id
-        +str api_hash
-        +str phone
-        +TelegramClient client
-        
-        +connect() TelegramClient
-        +disconnect()
-        +get_dialogs() List[Dict]
-        +get_channel_videos(channel_id) List[Dict]
-        +download_video(channel_id, video_id, output_dir, filename) str
-        +download_all_videos(channel_id, output_dir, progress_callback) List[str]
-    }
-    
-    class TelegramDLError {
-        +Exception base
-    }
-    
-    class AuthenticationError {
-        +TelegramDLError base
-    }
-    
-    class ChannelNotFoundError {
-        +TelegramDLError base
-    }
-    
-    class VideoNotFoundError {
-        +TelegramDLError base
-    }
-    
-    TelegramDownloader o-- TelegramDLError : raises
-    TelegramDLError <|-- AuthenticationError
-    TelegramDLError <|-- ChannelNotFoundError
-    TelegramDLError <|-- VideoNotFoundError
-    
-    TelegramDownloader --> "uses" TelethonClient : TelegramClient
+```
+TelegramDownloader
+├── api_id: int
+├── api_hash: str  
+├── phone: str
+├── client: TelegramClient
+│
+├── connect() → TelegramClient
+├── disconnect()
+├── get_dialogs() → List[Dict]
+├── get_channel_videos(channel_id) → List[Dict]
+├── download_video(channel_id, video_id, output_dir, filename) → str
+└── download_all_videos(channel_id, output_dir, progress_callback) → List[str]
+
+Exceptions
+├── TelegramDLError (base)
+├── AuthenticationError
+├── ChannelNotFoundError
+└── VideoNotFoundError
 ```
 
 ### Session Management Flow
 
-```mermaid
-flowchart LR
-    A([🚀 First Run]) --> B{Has Session?}
-    B -->|No| C["📱 OTP Verification"]
-    C --> D["💾 Save Session"]
-    D --> E[✅ Ready]
-    
-    B -->|Yes| F{Session Valid?}
-    F -->|Yes| E
-    F -->|No| C
-    
-    G([♻️ Next Run]) --> H{Session Exists?}
-    H -->|Yes| E
-    H -->|No| C
+```
+First Run ──► OTP Verification ──► Save Session ──► Ready
+    │              │                     │
+    │              │                     ▼
+    │              └───────────────────► Done!
+    │
+    ▼
+Next Run ──► Session Valid? ──► Yes ──► Ready
+                │
+                └── No ──► OTP Verification
 ```
 
 ### Error Handling
 
-```mermaid
-flowchart TB
-    E[❌ Error Occurs] --> A
-    
-    subgraph TelethonErrors
-        A1["🔴 ConnectionError"]
-        A2["🔴 SessionPasswordNeededError"]
-        A3["🔴 ChannelInvalidError"]
-    end
-    
-    subgraph CustomErrors
-        B1["🟠 TelegramDLError (base)"]
-        B2["🟠 AuthenticationError"]
-        B3["🟠 ChannelNotFoundError"]
-        B4["🟠 VideoNotFoundError"]
-    end
-    
-    subgraph Handling
-        C1["📋 User retries with valid creds"]
-        C2["📋 Check channel ID"]
-        C3["📋 Verify video exists"]
-    end
-    
-    A1 --> B1
-    A2 --> B2
-    A3 --> B3
-    
-    B1 <|-- B2
-    B1 <|-- B3
-    B1 <|-- B4
-    
-    B2 --> C1
-    B3 --> C2
-    B4 --> C3
-    
-    style TelethonErrors fill:#ffebee
-    style CustomErrors fill:#fff8e1
-    style Handling fill:#e8f5e9
+```
+┌─────────────────────────────────────────┐
+│           Telethon Errors               │
+│  ConnectionError │ SessionPasswordError  │
+└─────────────────┴───────────────────────┘
+                     │
+                     ▼
+┌─────────────────────────────────────────┐
+│          Custom Exceptions               │
+│  TelegramDLError (base)                 │
+│  ├─ AuthenticationError                │
+│  ├─ ChannelNotFoundError               │
+│  └─ VideoNotFoundError                  │
+└─────────────────────────────────────────┘
+                     │
+                     ▼
+          User fixes & retries
 ```
 
 ### Components
 
-| Component | Responsibility |
-|-----------|---------------|
-| `cli.py` | Command-line interface, argument parsing |
-| `client.py` | Core download logic, Telegram client management |
-| `exceptions.py` | Custom exception classes |
+| Component | File | Responsibility |
+|-----------|------|----------------|
+| CLI | `cli.py` | Command-line interface |
+| Client | `client.py` | Core download logic |
+| Exceptions | `exceptions.py` | Error classes |
 
 ### Key Features
 
-```mermaid
-mindmap
-  root((🔧 Features))
-    CLI Interface
-      Simple commands
-      Progress tracking
-      Channel listing
-    Core Logic
-      Async download
-      Auto retry
-      Skip existing
-    Session Management
-      Persistent login
-      OTP support
-      2FA support
-    File Handling
-      Named preservation
-      Custom output dir
-      Progress callbacks
-```
+- **CLI Interface** - Simple commands, progress tracking, channel listing
+- **Core Logic** - Async download, auto retry, skip existing files
+- **Session Management** - Persistent login, OTP/2FA support
+- **File Handling** - Named preservation, custom output, progress callbacks
 
 ## Features
 
@@ -263,6 +228,12 @@ mindmap
 - Named file preservation from Telegram
 - Skip already downloaded files
 - CLI and programmatic API
+
+## Links
+
+- **PyPI Package:** https://pypi.org/project/telegram-dl/
+- **GitHub Repository:** https://github.com/kuldeep27396/telegram-dl
+- **Report Issues:** https://github.com/kuldeep27396/telegram-dl/issues
 
 ## Requirements
 
