@@ -1,15 +1,15 @@
 Metadata-Version: 2.4
 Name: telegram-dl
-Version: 1.1.1
-Summary: Download videos from Telegram channels
+Version: 2.0.0
+Summary: A production-ready Python CLI tool to download videos from Telegram channels
 Author-email: KD <kd@example.com>
 License: MIT
 Project-URL: Homepage, https://github.com/kuldeep27396/telegram-dl
 Project-URL: Repository, https://github.com/kuldeep27396/telegram-dl
 Project-URL: Issues, https://github.com/kuldeep27396/telegram-dl/issues
-Keywords: telegram,download,video,cli
-Classifier: Development Status :: 4 - Beta
-Classifier: Intended Audience :: End Users/Desktop
+Keywords: telegram,download,video,cli,pydantic
+Classifier: Development Status :: 5 - Production/Stable
+Classifier: Intended Audience :: Developers
 Classifier: License :: OSI Approved :: MIT License
 Classifier: Programming Language :: Python :: 3
 Classifier: Programming Language :: Python :: 3.10
@@ -19,10 +19,16 @@ Requires-Python: >=3.10
 Description-Content-Type: text/markdown
 License-File: LICENSE
 Requires-Dist: telethon>=1.35.0
+Requires-Dist: pydantic>=2.0.0
+Requires-Dist: tenacity>=8.0.0
+Requires-Dist: tqdm>=4.0.0
 Provides-Extra: dev
 Requires-Dist: pytest; extra == "dev"
+Requires-Dist: pytest-asyncio; extra == "dev"
+Requires-Dist: pytest-cov; extra == "dev"
 Requires-Dist: black; extra == "dev"
 Requires-Dist: ruff; extra == "dev"
+Requires-Dist: mypy; extra == "dev"
 Dynamic: license-file
 
 # telegram-dl
@@ -32,7 +38,7 @@ Dynamic: license-file
 ![License](https://img.shields.io/badge/license-MIT-blue.svg)
 ![GitHub Release](https://img.shields.io/github/v/release/kuldeep27396/telegram-dl)
 
-A Python CLI tool to download videos from Telegram channels.
+A **production-ready** Python CLI tool to download videos from Telegram channels.
 
 ## Installation
 
@@ -58,35 +64,111 @@ telegram-dl --api-id 12345 --api-hash abc123def456 --phone +1234567890 --list-ch
 
 # Download all videos from a channel
 telegram-dl --api-id 12345 --api-hash abc123def456 --phone +1234567890 --channel -1001234567890
-```
 
-### 3. Use Custom Output Directory
-
-```bash
-telegram-dl --api-id 12345 --api-hash abc123def456 --phone +1234567890 --channel -1001234567890 --output ./my_videos
+# With progress bar
+telegram-dl --api-id 12345 --api-hash abc123def456 --phone +1234567890 --channel -1001234567890 --with-progress
 ```
 
 ## Programmatic Usage
 
 ```python
-from telegram_dl import TelegramDownloader
+from telegram_dl import TelegramDownloader, TelegramCredentials
+import asyncio
 
 async def main():
-    async with TelegramDownloader(
+    credentials = TelegramCredentials(
         api_id=12345,
         api_hash="abc123def456",
         phone="+1234567890"
-    ) as dl:
+    )
+    
+    async with TelegramDownloader(credentials) as dl:
         # List channels
-        async for dialog in dl.client.iter_dialogs():
-            if dialog.is_channel:
-                print(f"{dialog.id} | {dialog.title}")
+        channels = await dl.get_dialogs()
+        for ch in channels:
+            print(f"{ch.id} | {ch.title}")
         
         # Download all videos
-        await dl.download_all_videos(channel_id, "./videos")
+        results = await dl.download_all_videos(channel_id)
 
 asyncio.run(main())
 ```
+
+## Architecture & Design Patterns
+
+### SOLID Principles
+
+| Principle | Implementation |
+|-----------|----------------|
+| **S**ingle Responsibility | Each class has one job (Client, Repository, Builder, etc.) |
+| **O**pen/Closed | Open for extension via Strategy pattern |
+| **L**iskov Substitution | Observer and Strategy interfaces allow substitution |
+| **I**nterface Segregation | Small, focused interfaces (Observer, Repository, Factory) |
+| **D**ependency Inversion | Depend on abstractions (Protocols) not concretions |
+
+### Design Patterns Used
+
+#### 1. Builder Pattern
+```python
+downloader = (
+    DownloaderBuilder()
+    .with_credentials(api_id, api_hash, phone)
+    .with_output_dir("./videos")
+    .with_retry_strategy("exponential", max_attempts=5)
+    .with_progress_bar()
+    .with_logging()
+    .build()
+)
+```
+
+#### 2. Strategy Pattern
+```python
+# Multiple retry strategies available
+strategy = RetryStrategyFactory.create("exponential")  # Exponential backoff
+strategy = RetryStrategyFactory.create("fixed", delay=2.0)  # Fixed delay
+```
+
+#### 3. Observer Pattern
+```python
+downloader.attach_observer(ProgressBarObserver())
+downloader.attach_observer(LoggingObserver())
+```
+
+#### 4. Repository Pattern
+```python
+repo = VideoRepository(client, channel_entity)
+videos = await repo.get_all()
+video = await repo.get_by_id(123)
+```
+
+#### 5. Factory Pattern
+```python
+config = ConfigFactory.create_download_config(output_dir="./videos")
+strategy = RetryStrategyFactory.create("exponential", max_attempts=3)
+```
+
+### Data Models (Pydantic)
+
+All data models use **Pydantic v2** for:
+- Type validation
+- Serialization
+- Documentation
+
+```python
+from telegram_dl.models import VideoMetadata, DownloadProgress, DownloadResult
+
+# All models are fully typed and validated
+video = VideoMetadata(id=1, name="video.mp4", size=1024)
+```
+
+## Features
+
+- **Production-Ready**: Comprehensive error handling, logging, retries
+- **Type Safe**: Full type hints with Pydantic validation
+- **Design Patterns**: Builder, Factory, Observer, Repository, Strategy
+- **SOLID Principles**: Clean, maintainable, extensible code
+- **Progress Tracking**: Real-time progress bars and logging
+- **Retry Logic**: Multiple retry strategies with backoff
 
 ## Publishing Guide
 
@@ -97,7 +179,7 @@ asyncio.run(main())
 pip install build twine
 
 # 2. Update version in pyproject.toml
-# version = "1.2.0"
+# version = "2.0.0"
 
 # 3. Build the package
 rm -rf dist/
@@ -107,165 +189,17 @@ python -m build
 twine upload dist/*
 ```
 
-### GitHub Actions Auto-Publish
+## Requirements
 
-1. Go to [PyPI Trusted Publishing](https://pypi.org/manage/account/publishing/)
-2. Add a new publisher:
-   - **Owner:** `kuldeep27396`
-   - **Repository name:** `telegram-dl`
-   - **Workflow filename:** `publish.yml`
-   - **Environment name:** `pypi`
-3. Push a new tag:
-```bash
-git tag v1.2.0
-git push && git push --tags
-# Or create release on GitHub
-```
-
-## High Level Design (HLD)
-
-> **Note:** For colorful Mermaid diagrams, see the [GitHub README](https://github.com/kuldeep27396/telegram-dl/blob/main/README.md)
-
-### Architecture
-
-```
-┌─────────────────────────────────────────────────────────────┐
-│                      User Layer (👤)                         │
-│  ┌─────────────────┐         ┌─────────────────────┐       │
-│  │  CLI Interface  │         │    Python API        │       │
-│  │   (telegram-dl) │         │ TelegramDownloader   │       │
-│  └─────────────────┘         └─────────────────────┘       │
-└─────────────────────────────────────────────────────────────┘
-                              │
-                              ▼
-┌─────────────────────────────────────────────────────────────┐
-│                    Core Layer (⚙️)                           │
-│  TelegramDownloader                                          │
-│  ├─ connect() / disconnect()                               │
-│  ├─ get_channel_videos()                                    │
-│  ├─ download_video()                                        │
-│  └─ download_all_videos()                                   │
-└─────────────────────────────────────────────────────────────┘
-                              │
-                              ▼
-┌─────────────────────────────────────────────────────────────┐
-│                  Protocol Layer (🔌)                         │
-│  Telethon Library                                            │
-│  ├─ MTProto Protocol                                        │
-│  ├─ Session Management                                      │
-│  └─ OTP/2FA Authentication                                 │
-└─────────────────────────────────────────────────────────────┘
-                              │
-                              ▼
-┌─────────────────────────────────────────────────────────────┐
-│              External Services (🌐)                           │
-│            Telegram Servers (api.telegram.org)                 │
-└─────────────────────────────────────────────────────────────┘
-```
-
-### Data Flow
-
-```
-User ──► CLI/API ──► TelegramDownloader ──► Telethon ──► Telegram
-           │               │                    │           │
-        Credentials    Connect & Auth       MTProto    Server
-           │               │                    │           │
-           ▼               ▼                    ▼           ▼
-         Input      Session Created       Protocol    Video Stream
-```
-
-### Class Structure
-
-```
-TelegramDownloader
-├── api_id: int
-├── api_hash: str  
-├── phone: str
-├── client: TelegramClient
-│
-├── connect() → TelegramClient
-├── disconnect()
-├── get_dialogs() → List[Dict]
-├── get_channel_videos(channel_id) → List[Dict]
-├── download_video(channel_id, video_id, output_dir, filename) → str
-└── download_all_videos(channel_id, output_dir, progress_callback) → List[str]
-
-Exceptions
-├── TelegramDLError (base)
-├── AuthenticationError
-├── ChannelNotFoundError
-└── VideoNotFoundError
-```
-
-### Session Management Flow
-
-```
-First Run ──► OTP Verification ──► Save Session ──► Ready
-    │              │                     │
-    │              │                     ▼
-    │              └───────────────────► Done!
-    │
-    ▼
-Next Run ──► Session Valid? ──► Yes ──► Ready
-                │
-                └── No ──► OTP Verification
-```
-
-### Error Handling
-
-```
-┌─────────────────────────────────────────┐
-│           Telethon Errors               │
-│  ConnectionError │ SessionPasswordError  │
-└─────────────────┴───────────────────────┘
-                     │
-                     ▼
-┌─────────────────────────────────────────┐
-│          Custom Exceptions               │
-│  TelegramDLError (base)                 │
-│  ├─ AuthenticationError                │
-│  ├─ ChannelNotFoundError               │
-│  └─ VideoNotFoundError                  │
-└─────────────────────────────────────────┘
-                     │
-                     ▼
-          User fixes & retries
-```
-
-### Components
-
-| Component | File | Responsibility |
-|-----------|------|----------------|
-| CLI | `cli.py` | Command-line interface |
-| Client | `client.py` | Core download logic |
-| Exceptions | `exceptions.py` | Error classes |
-
-### Key Features
-
-- **CLI Interface** - Simple commands, progress tracking, channel listing
-- **Core Logic** - Async download, auto retry, skip existing files
-- **Session Management** - Persistent login, OTP/2FA support
-- **File Handling** - Named preservation, custom output, progress callbacks
-
-## Features
-
-- Download all videos from Telegram channels
-- Automatic session management (login once, use many times)
-- Progress tracking
-- Named file preservation from Telegram
-- Skip already downloaded files
-- CLI and programmatic API
+- Python 3.10+
+- Telegram API credentials (get from [my.telegram.org](https://my.telegram.org))
+- Dependencies: telethon, pydantic, tenacity, tqdm
 
 ## Links
 
 - **PyPI Package:** https://pypi.org/project/telegram-dl/
 - **GitHub Repository:** https://github.com/kuldeep27396/telegram-dl
 - **Report Issues:** https://github.com/kuldeep27396/telegram-dl/issues
-
-## Requirements
-
-- Python 3.10+
-- Telegram API credentials (get from [my.telegram.org](https://my.telegram.org))
 
 ## License
 

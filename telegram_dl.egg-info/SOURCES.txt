@@ -5,6 +5,8 @@ telegram_dl/__init__.py
 telegram_dl/cli.py
 telegram_dl/client.py
 telegram_dl/exceptions.py
+telegram_dl/models.py
+telegram_dl/patterns.py
 telegram_dl/py.typed
 telegram_dl.egg-info/PKG-INFO
 telegram_dl.egg-info/SOURCES.txt
@@ -12,3 +14,4 @@ telegram_dl.egg-info/dependency_links.txt
 telegram_dl.egg-info/entry_points.txt
 telegram_dl.egg-info/requires.txt
 telegram_dl.egg-info/top_level.txt
+tests/test_telegram_dl.py
